@@ -126,6 +126,7 @@ function App() {
     codex: true,
     gemini: true,
     opencode: true,
+    openclaw: true,
   };
 
   const getFirstVisibleApp = (): AppId => {
@@ -133,6 +134,7 @@ function App() {
     if (visibleApps.codex) return "codex";
     if (visibleApps.gemini) return "gemini";
     if (visibleApps.opencode) return "opencode";
+    if (visibleApps.openclaw) return "openclaw";
     return "claude"; // fallback
   };
 
@@ -589,7 +591,7 @@ function App() {
           return (
             <SkillsPage
               ref={skillsPageRef}
-              initialApp={activeApp === "opencode" ? "claude" : activeApp}
+              initialApp={activeApp === "opencode" || activeApp === "openclaw" ? "claude" : activeApp}
             />
           );
         case "mcp":
