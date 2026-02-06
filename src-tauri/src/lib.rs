@@ -956,6 +956,20 @@ pub fn run() {
             commands::test_proxy_url,
             commands::get_upstream_proxy_status,
             commands::scan_local_proxies,
+            // Workspace (Git-managed)
+            commands::workspace_ensure_layout,
+            commands::workspace_sync_all,
+            commands::workspace_sync_mcp,
+            commands::workspace_sync_skills,
+            commands::workspace_sync_hooks,
+            commands::workspace_get_mcp_config,
+            commands::workspace_upsert_mcp_server,
+            commands::workspace_delete_mcp_server,
+            commands::workspace_reorder_mcp_servers,
+            commands::workspace_get_skills,
+            commands::workspace_update_skill_apps,
+            commands::workspace_get_hooks,
+            commands::workspace_read_hook_file,
             // Window theme control
             commands::set_window_theme,
         ]);

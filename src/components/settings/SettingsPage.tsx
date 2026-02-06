@@ -30,7 +30,7 @@ import {
 } from "@/components/ui/accordion";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Button } from "@/components/ui/button";
-import { settingsApi } from "@/lib/api";
+import { settingsApi, workspaceApi } from "@/lib/api";
 import { LanguageSettings } from "@/components/settings/LanguageSettings";
 import { ThemeSettings } from "@/components/settings/ThemeSettings";
 import { WindowSettings } from "@/components/settings/WindowSettings";
@@ -106,6 +106,7 @@ export function SettingsPage({
 
   const [activeTab, setActiveTab] = useState<string>("general");
   const [showRestartPrompt, setShowRestartPrompt] = useState(false);
+  const [isWorkspaceSyncing, setIsWorkspaceSyncing] = useState(false);
 
   useEffect(() => {
     if (open) {
@@ -184,6 +185,21 @@ export function SettingsPage({
     },
     [autoSaveSettings, settings, t, updateSettings],
   );
+
+  const handleWorkspaceSync = useCallback(async () => {
+    try {
+      setIsWorkspaceSyncing(true);
+      await workspaceApi.ensureLayout();
+      await workspaceApi.syncAll();
+      toast.success("Workspace synced", { closeButton: true });
+    } catch (error) {
+      const message =
+        error instanceof Error ? error.message : "Workspace sync failed";
+      toast.error(message, { closeButton: true });
+    } finally {
+      setIsWorkspaceSyncing(false);
+    }
+  }, []);
 
   const isBusy = useMemo(() => isLoading && !settings, [isLoading, settings]);
 
@@ -313,6 +329,52 @@ export function SettingsPage({
                             onBrowseDirectory={browseDirectory}
                             onResetDirectory={resetDirectory}
                           />
+                        </AccordionContent>
+                      </AccordionItem>
+
+                      <AccordionItem
+                        value="workspace"
+                        className="rounded-xl glass-card overflow-hidden"
+                      >
+                        <AccordionTrigger className="px-6 py-4 hover:no-underline hover:bg-muted/50 data-[state=open]:bg-muted/50">
+                          <div className="flex items-center gap-3">
+                            <Database className="h-5 w-5 text-primary" />
+                            <div className="text-left">
+                              <h3 className="text-base font-semibold">
+                                Workspace (~/cc-switch/data)
+                              </h3>
+                              <p className="text-sm text-muted-foreground font-normal">
+                                Sync Git-managed Skills/MCP/Hooks into each tool
+                              </p>
+                            </div>
+                          </div>
+                        </AccordionTrigger>
+                        <AccordionContent className="px-6 pb-6 pt-4 border-t border-border/50">
+                          <div className="space-y-4">
+                            <div className="text-sm text-muted-foreground">
+                              <div>skills: ~/cc-switch/data/skills</div>
+                              <div>mcp: ~/cc-switch/data/mcp/mcp.json</div>
+                              <div>
+                                hooks: ~/cc-switch/data/hooks/&lt;app&gt;/
+                              </div>
+                            </div>
+                            <div>
+                              <Button
+                                type="button"
+                                onClick={handleWorkspaceSync}
+                                disabled={isWorkspaceSyncing}
+                              >
+                                {isWorkspaceSyncing ? (
+                                  <span className="inline-flex items-center gap-2">
+                                    <Loader2 className="h-4 w-4 animate-spin" />
+                                    Syncing...
+                                  </span>
+                                ) : (
+                                  "Sync Workspace"
+                                )}
+                              </Button>
+                            </div>
+                          </div>
                         </AccordionContent>
                       </AccordionItem>
 

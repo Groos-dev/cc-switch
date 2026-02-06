@@ -56,6 +56,7 @@ import { UniversalProviderPanel } from "@/components/universal";
 import { McpIcon } from "@/components/BrandIcons";
 import { Button } from "@/components/ui/button";
 import { SessionManagerPage } from "@/components/sessions/SessionManagerPage";
+import { WorkspacePage } from "@/components/workspace/WorkspacePage";
 
 type View =
   | "providers"
@@ -66,7 +67,8 @@ type View =
   | "mcp"
   | "agents"
   | "universal"
-  | "sessions";
+  | "sessions"
+  | "workspace";
 
 // macOS Overlay mode needs space for traffic light buttons, Windows/Linux use native titlebar
 const DRAG_BAR_HEIGHT = isWindows() || isLinux() ? 0 : 28; // px
@@ -95,6 +97,7 @@ const VALID_VIEWS: View[] = [
   "agents",
   "universal",
   "sessions",
+  "workspace",
 ];
 
 const getInitialView = (): View => {
@@ -545,6 +548,9 @@ function App() {
     }
   };
 
+  // Workspace 同步处理（已移除，改为打开页面）
+  // const handleWorkspaceSync = async () => { ... }
+
   // 导入配置成功后刷新
   const handleImportSuccess = async () => {
     try {
@@ -623,6 +629,8 @@ function App() {
 
         case "sessions":
           return <SessionManagerPage />;
+        case "workspace":
+          return <WorkspacePage />;
         default:
           return (
             <div className="px-6 flex flex-col h-[calc(100vh-8rem)] overflow-hidden">
@@ -777,6 +785,8 @@ function App() {
                       defaultValue: "统一供应商",
                     })}
                   {currentView === "sessions" && t("sessionManager.title")}
+                  {currentView === "workspace" &&
+                    t("workspace.title", { defaultValue: "工作区管理" })}
                 </h1>
               </div>
             ) : (
@@ -955,6 +965,17 @@ function App() {
                 />
 
                 <div className="flex items-center gap-1 p-1 bg-muted rounded-xl">
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    onClick={() => setCurrentView("workspace")}
+                    className="text-muted-foreground hover:text-foreground hover:bg-black/5 dark:hover:bg-white/5"
+                    title={t("workspace.manage", {
+                      defaultValue: "工作区管理",
+                    })}
+                  >
+                    <RefreshCw className="flex-shrink-0 w-4 h-4" />
+                  </Button>
                   <Button
                     variant="ghost"
                     size="sm"
