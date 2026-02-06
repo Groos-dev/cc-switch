@@ -8,7 +8,7 @@ export { workspaceApi } from "./workspace";
 export { usageApi } from "./usage";
 export { vscodeApi } from "./vscode";
 export { proxyApi } from "./proxy";
-export { sessionsApi } from "./sessions";
+export { openclawApi } from "./openclaw";
 export * as configApi from "./config";
 export type { ProviderSwitchEvent } from "./providers";
 export type { Prompt } from "./prompts";
