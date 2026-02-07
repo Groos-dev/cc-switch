@@ -1104,7 +1104,7 @@ function App() {
         </div>
       </header>
 
-      <main className="flex-1 min-h-0 flex flex-col animate-fade-in">
+      <main className="flex-1 min-h-0 flex flex-col overflow-y-auto animate-fade-in">
         {renderContent()}
       </main>
 
