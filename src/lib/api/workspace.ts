@@ -60,8 +60,6 @@ export const workspaceApi = {
     return await invoke("workspace_sync_hooks");
   },
 
-  // ========== MCP Configuration Management ==========
-
   async getMcpConfig(): Promise<WorkspaceMcpConfig> {
     return await invoke("workspace_get_mcp_config");
   },
@@ -90,8 +88,6 @@ export const workspaceApi = {
     return await invoke("workspace_reorder_mcp_servers", { serverIds });
   },
 
-  // ========== Skills Management ==========
-
   async getSkills(): Promise<WorkspaceSkill[]> {
     return await invoke("workspace_get_skills");
   },
@@ -103,13 +99,19 @@ export const workspaceApi = {
     return await invoke("workspace_update_skill_apps", { name, apps });
   },
 
-  // ========== Hooks Management ==========
-
   async getHooks(): Promise<WorkspaceHookApp[]> {
     return await invoke("workspace_get_hooks");
   },
 
   async readHookFile(filePath: string): Promise<string> {
     return await invoke("workspace_read_hook_file", { filePath });
+  },
+
+  async readFile(filename: string): Promise<string | null> {
+    return invoke<string | null>("read_workspace_file", { filename });
+  },
+
+  async writeFile(filename: string, content: string): Promise<void> {
+    return invoke<void>("write_workspace_file", { filename, content });
   },
 };

@@ -1,5 +1,26 @@
+use crate::config::write_text_file;
+use crate::openclaw_config::get_openclaw_dir;
 use crate::services::workspace::WorkspaceService;
 use serde_json::Value;
+
+const ALLOWED_FILES: &[&str] = &[
+    "AGENTS.md",
+    "SOUL.md",
+    "USER.md",
+    "IDENTITY.md",
+    "TOOLS.md",
+    "MEMORY.md",
+];
+
+fn validate_filename(filename: &str) -> Result<(), String> {
+    if !ALLOWED_FILES.contains(&filename) {
+        return Err(format!(
+            "Invalid workspace filename: {filename}. Allowed: {}",
+            ALLOWED_FILES.join(", ")
+        ));
+    }
+    Ok(())
+}
 
 #[tauri::command]
 pub async fn workspace_ensure_layout() -> Result<bool, String> {
@@ -36,8 +57,6 @@ pub async fn workspace_sync_hooks() -> Result<bool, String> {
         .map_err(|e| e.to_string())
 }
 
-// ========== MCP Configuration Management ==========
-
 #[tauri::command]
 pub async fn workspace_get_mcp_config(
 ) -> Result<crate::services::workspace::WorkspaceMcpFile, String> {
@@ -71,8 +90,6 @@ pub async fn workspace_reorder_mcp_servers(server_ids: Vec<String>) -> Result<bo
         .map_err(|e| e.to_string())
 }
 
-// ========== Skills Management ==========
-
 #[tauri::command]
 pub async fn workspace_get_skills(
 ) -> Result<Vec<crate::services::workspace::WorkspaceSkill>, String> {
@@ -89,8 +106,6 @@ pub async fn workspace_update_skill_apps(
         .map_err(|e| e.to_string())
 }
 
-// ========== Hooks Management ==========
-
 #[tauri::command]
 pub async fn workspace_get_hooks(
 ) -> Result<Vec<crate::services::workspace::WorkspaceHookApp>, String> {
@@ -101,4 +116,33 @@ pub async fn workspace_get_hooks(
 pub async fn workspace_read_hook_file(file_path: String) -> Result<String, String> {
     std::fs::read_to_string(&file_path)
         .map_err(|e| format!("Failed to read file {}: {}", file_path, e))
+}
+
+#[tauri::command]
+pub async fn read_workspace_file(filename: String) -> Result<Option<String>, String> {
+    validate_filename(&filename)?;
+
+    let path = get_openclaw_dir().join("workspace").join(&filename);
+
+    if !path.exists() {
+        return Ok(None);
+    }
+
+    std::fs::read_to_string(&path)
+        .map(Some)
+        .map_err(|e| format!("Failed to read workspace file {filename}: {e}"))
+}
+
+#[tauri::command]
+pub async fn write_workspace_file(filename: String, content: String) -> Result<(), String> {
+    validate_filename(&filename)?;
+
+    let workspace_dir = get_openclaw_dir().join("workspace");
+    std::fs::create_dir_all(&workspace_dir)
+        .map_err(|e| format!("Failed to create workspace directory: {e}"))?;
+
+    let path = workspace_dir.join(&filename);
+
+    write_text_file(&path, &content)
+        .map_err(|e| format!("Failed to write workspace file {filename}: {e}"))
 }

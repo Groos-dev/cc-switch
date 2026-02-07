@@ -16,6 +16,7 @@ import {
   Download,
   FolderArchive,
   Search,
+  FolderOpen,
 } from "lucide-react";
 import type { Provider, VisibleApps } from "@/types";
 import type { EnvConflict } from "@/types/env";
@@ -57,6 +58,7 @@ import { Button } from "@/components/ui/button";
 import { SessionManagerPage } from "@/components/sessions/SessionManagerPage";
 import { WorkspacePage } from "@/components/workspace/WorkspacePage";
 import { useDisableCurrentOmo } from "@/lib/query/omo";
+import WorkspaceFilesPanel from "@/components/workspace/WorkspaceFilesPanel";
 
 type View =
   | "providers"
@@ -75,7 +77,7 @@ const HEADER_HEIGHT = 64; // px
 const CONTENT_TOP_OFFSET = DRAG_BAR_HEIGHT + HEADER_HEIGHT;
 
 const STORAGE_KEY = "cc-switch-last-app";
-const VALID_APPS: AppId[] = ["claude", "codex", "gemini", "opencode"];
+const VALID_APPS: AppId[] = ["claude", "codex", "gemini", "opencode", "openclaw"];
 
 const getInitialApp = (): AppId => {
   const saved = localStorage.getItem(STORAGE_KEY) as AppId | null;
@@ -1003,6 +1005,17 @@ function App() {
                   >
                     <Book className="w-4 h-4" />
                   </Button>
+                  {activeApp === "openclaw" && (
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      onClick={() => setCurrentView("workspace")}
+                      className="text-muted-foreground hover:text-foreground hover:bg-black/5 dark:hover:bg-white/5"
+                      title={t("workspace.manage")}
+                    >
+                      <FolderOpen className="w-4 h-4" />
+                    </Button>
+                  )}
                   <Button
                     variant="ghost"
                     size="sm"
