@@ -10,6 +10,9 @@ const ALLOWED_FILES: &[&str] = &[
     "IDENTITY.md",
     "TOOLS.md",
     "MEMORY.md",
+    "HEARTBEAT.md",
+    "BOOTSTRAP.md",
+    "BOOT.md",
 ];
 
 fn validate_filename(filename: &str) -> Result<(), String> {
@@ -138,6 +141,7 @@ pub async fn write_workspace_file(filename: String, content: String) -> Result<(
     validate_filename(&filename)?;
 
     let workspace_dir = get_openclaw_dir().join("workspace");
+    // Ensure workspace directory exists
     std::fs::create_dir_all(&workspace_dir)
         .map_err(|e| format!("Failed to create workspace directory: {e}"))?;
 
