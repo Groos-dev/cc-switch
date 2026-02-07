@@ -17,6 +17,9 @@ import {
   FolderArchive,
   Search,
   FolderOpen,
+  KeyRound,
+  Shield,
+  Cpu,
 } from "lucide-react";
 import type { Provider, VisibleApps } from "@/types";
 import type { EnvConflict } from "@/types/env";
@@ -59,6 +62,9 @@ import { SessionManagerPage } from "@/components/sessions/SessionManagerPage";
 import { WorkspacePage } from "@/components/workspace/WorkspacePage";
 import { useDisableCurrentOmo } from "@/lib/query/omo";
 import WorkspaceFilesPanel from "@/components/workspace/WorkspaceFilesPanel";
+import EnvPanel from "@/components/openclaw/EnvPanel";
+import ToolsPanel from "@/components/openclaw/ToolsPanel";
+import AgentsDefaultsPanel from "@/components/openclaw/AgentsDefaultsPanel";
 
 type View =
   | "providers"
@@ -70,7 +76,10 @@ type View =
   | "agents"
   | "universal"
   | "sessions"
-  | "workspace";
+  | "workspace"
+  | "openclawEnv"
+  | "openclawTools"
+  | "openclawAgents";
 
 const DRAG_BAR_HEIGHT = isWindows() || isLinux() ? 0 : 28; // px
 const HEADER_HEIGHT = 64; // px
@@ -105,6 +114,9 @@ const VALID_VIEWS: View[] = [
   "universal",
   "sessions",
   "workspace",
+  "openclawEnv",
+  "openclawTools",
+  "openclawAgents",
 ];
 
 const getInitialView = (): View => {
@@ -638,6 +650,12 @@ function App() {
           return <SessionManagerPage />;
         case "workspace":
           return <WorkspacePage />;
+        case "openclawEnv":
+          return <EnvPanel />;
+        case "openclawTools":
+          return <ToolsPanel />;
+        case "openclawAgents":
+          return <AgentsDefaultsPanel />;
         default:
           return (
             <div className="px-6 flex flex-col h-[calc(100vh-8rem)] overflow-hidden">
@@ -798,6 +816,10 @@ function App() {
                   {currentView === "sessions" && t("sessionManager.title")}
                   {currentView === "workspace" &&
                     t("workspace.title", { defaultValue: "工作区管理" })}
+                  {currentView === "openclawEnv" && t("openclaw.env.title")}
+                  {currentView === "openclawTools" && t("openclaw.tools.title")}
+                  {currentView === "openclawAgents" &&
+                    t("openclaw.agents.title")}
                 </h1>
               </div>
             ) : (
@@ -977,15 +999,44 @@ function App() {
 
                 <div className="flex items-center gap-1 p-1 bg-muted rounded-xl">
                   {activeApp === "openclaw" ? (
-                    <Button
-                      variant="ghost"
-                      size="sm"
-                      onClick={() => setCurrentView("workspace")}
-                      className="text-muted-foreground hover:text-foreground hover:bg-black/5 dark:hover:bg-white/5"
-                      title={t("workspace.manage")}
-                    >
-                      <FolderOpen className="w-4 h-4" />
-                    </Button>
+                    <>
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        onClick={() => setCurrentView("workspace")}
+                        className="text-muted-foreground hover:text-foreground hover:bg-black/5 dark:hover:bg-white/5"
+                        title={t("workspace.manage")}
+                      >
+                        <FolderOpen className="w-4 h-4" />
+                      </Button>
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        onClick={() => setCurrentView("openclawEnv")}
+                        className="text-muted-foreground hover:text-foreground hover:bg-black/5 dark:hover:bg-white/5"
+                        title={t("openclaw.env.title")}
+                      >
+                        <KeyRound className="w-4 h-4" />
+                      </Button>
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        onClick={() => setCurrentView("openclawTools")}
+                        className="text-muted-foreground hover:text-foreground hover:bg-black/5 dark:hover:bg-white/5"
+                        title={t("openclaw.tools.title")}
+                      >
+                        <Shield className="w-4 h-4" />
+                      </Button>
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        onClick={() => setCurrentView("openclawAgents")}
+                        className="text-muted-foreground hover:text-foreground hover:bg-black/5 dark:hover:bg-white/5"
+                        title={t("openclaw.agents.title")}
+                      >
+                        <Cpu className="w-4 h-4" />
+                      </Button>
+                    </>
                   ) : (
                     <>
                       <Button
