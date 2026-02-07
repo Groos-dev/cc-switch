@@ -201,6 +201,7 @@ function App() {
     switchProvider,
     deleteProvider,
     saveUsageScript,
+    setAsDefaultModel,
   } = useProviderActions(activeApp);
 
   const disableOmoMutation = useDisableCurrentOmo();
@@ -675,6 +676,9 @@ function App() {
                         activeApp === "claude" ? handleOpenTerminal : undefined
                       }
                       onCreate={() => setIsAddOpen(true)}
+                      onSetAsDefault={
+                        activeApp === "openclaw" ? setAsDefaultModel : undefined
+                      }
                     />
                   </motion.div>
                 </AnimatePresence>
