@@ -972,7 +972,7 @@ function App() {
             )}
             {currentView === "providers" && (
               <>
-                {activeApp !== "opencode" && (
+                {activeApp !== "opencode" && activeApp !== "openclaw" && (
                   <>
                     <ProxyToggle activeApp={activeApp} />
                     <div
