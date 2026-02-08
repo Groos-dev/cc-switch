@@ -32,6 +32,7 @@ import {
 } from "@/lib/api";
 import { checkAllEnvConflicts, checkEnvConflicts } from "@/lib/api/env";
 import { useProviderActions } from "@/hooks/useProviderActions";
+import { openclawKeys } from "@/hooks/useOpenClaw";
 import { useProxyStatus } from "@/hooks/useProxyStatus";
 import { useLastValidValue } from "@/hooks/useLastValidValue";
 import { extractErrorMessage } from "@/utils/errorUtils";
@@ -459,7 +460,7 @@ function App() {
         });
       } else if (activeApp === "openclaw") {
         await queryClient.invalidateQueries({
-          queryKey: ["openclawLiveProviderIds"],
+          queryKey: openclawKeys.liveProviderIds,
         });
       }
       toast.success(
