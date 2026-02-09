@@ -2,6 +2,7 @@ pub mod config;
 pub mod env_checker;
 pub mod env_manager;
 pub mod mcp;
+pub mod omo;
 pub mod prompt;
 pub mod provider;
 pub mod proxy;
@@ -13,6 +14,7 @@ pub mod workspace;
 
 pub use config::ConfigService;
 pub use mcp::McpService;
+pub use omo::OmoService;
 pub use prompt::PromptService;
 pub use provider::{ProviderService, ProviderSortUpdate};
 pub use proxy::ProxyService;
