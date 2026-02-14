@@ -17,8 +17,10 @@ mod session_manager;
 mod settings;
 pub mod skill;
 mod stream_check;
+mod sync_support;
 mod usage;
 mod workspace;
+mod webdav_sync;
 
 pub use config::*;
 pub use deeplink::*;
@@ -39,3 +41,4 @@ pub use skill::*;
 pub use stream_check::*;
 pub use usage::*;
 pub use workspace::*;
+pub use webdav_sync::*;
