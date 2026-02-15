@@ -12,6 +12,7 @@ pub mod stream_check;
 pub mod usage_stats;
 pub mod workspace;
 pub mod webdav;
+pub mod webdav_auto_sync;
 pub mod webdav_sync;
 
 pub use config::ConfigService;
