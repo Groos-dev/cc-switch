@@ -44,7 +44,8 @@ import { AboutSection } from "@/components/settings/AboutSection";
 import { GlobalProxySettings } from "@/components/settings/GlobalProxySettings";
 import { ProxyPanel } from "@/components/proxy";
 import { PricingConfigPanel } from "@/components/usage/PricingConfigPanel";
-import { ModelTestConfigPanel } from "@/components/usage/ModelTestConfigPanel";
+// Hidden: stream check feature disabled
+// import { ModelTestConfigPanel } from "@/components/usage/ModelTestConfigPanel";
 import { AutoFailoverConfigPanel } from "@/components/proxy/AutoFailoverConfigPanel";
 import { FailoverQueueManager } from "@/components/proxy/FailoverQueueManager";
 import { UsageDashboard } from "@/components/usage/UsageDashboard";
@@ -577,6 +578,7 @@ export function SettingsPage({
                         </AccordionContent>
                       </AccordionItem>
 
+                      {/* Hidden: stream check feature disabled
                       <AccordionItem
                         value="test"
                         className="rounded-xl glass-card overflow-hidden"
@@ -598,6 +600,7 @@ export function SettingsPage({
                           <ModelTestConfigPanel />
                         </AccordionContent>
                       </AccordionItem>
+                      */}
 
                       <AccordionItem
                         value="pricing"
