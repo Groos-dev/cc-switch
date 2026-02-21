@@ -182,7 +182,8 @@ function App() {
       activeApp !== "claude" &&
       activeApp !== "codex" &&
       activeApp !== "opencode" &&
-      activeApp !== "openclaw"
+      activeApp !== "openclaw" &&
+      activeApp !== "gemini"
     ) {
       setCurrentView("providers");
     }
@@ -230,7 +231,8 @@ function App() {
     activeApp === "claude" ||
     activeApp === "codex" ||
     activeApp === "opencode" ||
-    activeApp === "openclaw";
+    activeApp === "openclaw" ||
+    activeApp === "gemini";
 
   const {
     addProvider,
