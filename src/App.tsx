@@ -180,7 +180,9 @@ function App() {
     if (
       currentView === "sessions" &&
       activeApp !== "claude" &&
-      activeApp !== "codex"
+      activeApp !== "codex" &&
+      activeApp !== "opencode" &&
+      activeApp !== "openclaw"
     ) {
       setCurrentView("providers");
     }
@@ -224,7 +226,11 @@ function App() {
   const providers = useMemo(() => data?.providers ?? {}, [data]);
   const currentProviderId = data?.currentProviderId ?? "";
   const hasSkillsSupport = true;
-  const hasSessionSupport = activeApp === "claude" || activeApp === "codex";
+  const hasSessionSupport =
+    activeApp === "claude" ||
+    activeApp === "codex" ||
+    activeApp === "opencode" ||
+    activeApp === "openclaw";
 
   const {
     addProvider,
@@ -1123,6 +1129,15 @@ function App() {
                             title={t("openclaw.agents.title")}
                           >
                             <Cpu className="w-4 h-4" />
+                          </Button>
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            onClick={() => setCurrentView("sessions")}
+                            className="text-muted-foreground hover:text-foreground hover:bg-black/5 dark:hover:bg-white/5"
+                            title={t("sessionManager.title")}
+                          >
+                            <History className="w-4 h-4" />
                           </Button>
                         </>
                       ) : (
