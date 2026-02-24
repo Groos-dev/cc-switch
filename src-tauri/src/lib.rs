@@ -1065,6 +1065,7 @@ pub fn run() {
             commands::read_daily_memory_file,
             commands::write_daily_memory_file,
             commands::delete_daily_memory_file,
+            commands::search_daily_memory_files,
         ]);
 
     let app = builder
