@@ -33,7 +33,7 @@ import {
 } from "@/lib/api";
 import { checkAllEnvConflicts, checkEnvConflicts } from "@/lib/api/env";
 import { useProviderActions } from "@/hooks/useProviderActions";
-import { openclawKeys } from "@/hooks/useOpenClaw";
+import { openclawKeys, useOpenClawHealth } from "@/hooks/useOpenClaw";
 import { useProxyStatus } from "@/hooks/useProxyStatus";
 import { useAutoCompact } from "@/hooks/useAutoCompact";
 import { useLastValidValue } from "@/hooks/useLastValidValue";
@@ -71,6 +71,7 @@ import WorkspaceFilesPanel from "@/components/workspace/WorkspaceFilesPanel";
 import EnvPanel from "@/components/openclaw/EnvPanel";
 import ToolsPanel from "@/components/openclaw/ToolsPanel";
 import AgentsDefaultsPanel from "@/components/openclaw/AgentsDefaultsPanel";
+import OpenClawHealthBanner from "@/components/openclaw/OpenClawHealthBanner";
 
 type View =
   | "providers"
@@ -230,6 +231,17 @@ function App() {
   });
   const providers = useMemo(() => data?.providers ?? {}, [data]);
   const currentProviderId = data?.currentProviderId ?? "";
+  const isOpenClawView =
+    activeApp === "openclaw" &&
+    (currentView === "providers" ||
+      currentView === "workspace" ||
+      currentView === "sessions" ||
+      currentView === "openclawEnv" ||
+      currentView === "openclawTools" ||
+      currentView === "openclawAgents");
+  const { data: openclawHealthWarnings = [] } = useOpenClawHealth(
+    isOpenClawView,
+  );
   const hasSkillsSupport = true;
   const hasSessionSupport =
     activeApp === "claude" ||
@@ -544,6 +556,9 @@ function App() {
       } else if (activeApp === "openclaw") {
         await queryClient.invalidateQueries({
           queryKey: openclawKeys.liveProviderIds,
+        });
+        await queryClient.invalidateQueries({
+          queryKey: openclawKeys.health,
         });
       }
       toast.success(
@@ -1227,6 +1242,9 @@ function App() {
       </header>
 
       <main className="flex-1 min-h-0 flex flex-col overflow-y-auto animate-fade-in">
+        {isOpenClawView && openclawHealthWarnings.length > 0 && (
+          <OpenClawHealthBanner warnings={openclawHealthWarnings} />
+        )}
         {renderContent()}
       </main>
 
