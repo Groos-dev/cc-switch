@@ -1040,6 +1040,17 @@ function App() {
                       variant="ghost"
                       size="sm"
                       onClick={() =>
+                        unifiedSkillsPanelRef.current?.openRestoreFromBackup()
+                      }
+                      className="hover:bg-black/5 dark:hover:bg-white/5"
+                    >
+                      <History className="w-4 h-4 mr-2" />
+                      {t("skills.restoreFromBackup.button")}
+                    </Button>
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      onClick={() =>
                         unifiedSkillsPanelRef.current?.openInstallFromZip()
                       }
                       className="hover:bg-black/5 dark:hover:bg-white/5"
