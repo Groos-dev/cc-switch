@@ -1,6 +1,8 @@
 #![allow(non_snake_case)]
 
+mod auth;
 mod config;
+mod copilot;
 mod deeplink;
 mod env;
 mod failover;
@@ -19,13 +21,15 @@ mod settings;
 pub mod skill;
 mod stream_check;
 mod sync_support;
-mod toolsearch;
+
 mod usage;
 mod workspace;
 mod webdav_sync;
 mod workspace;
 
+pub use auth::*;
 pub use config::*;
+pub use copilot::*;
 pub use deeplink::*;
 pub use env::*;
 pub use failover::*;
@@ -43,7 +47,7 @@ pub use session_manager::*;
 pub use settings::*;
 pub use skill::*;
 pub use stream_check::*;
-pub use toolsearch::*;
+
 pub use usage::*;
 pub use workspace::*;
 pub use webdav_sync::*;
