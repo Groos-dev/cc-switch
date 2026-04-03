@@ -25,7 +25,6 @@ mod sync_support;
 mod usage;
 mod workspace;
 mod webdav_sync;
-mod workspace;
 
 pub use auth::*;
 pub use config::*;
@@ -51,4 +50,3 @@ pub use stream_check::*;
 pub use usage::*;
 pub use workspace::*;
 pub use webdav_sync::*;
-pub use workspace::*;
