@@ -2,7 +2,7 @@ import React, { useState } from "react";
 import { useTranslation } from "react-i18next";
 import { Plus, RefreshCw, Database } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { Tabs, TabsContent } from "@/components/ui/tabs";
 import {
   useWorkspaceMcpConfig,
   useSyncWorkspace,
@@ -15,13 +15,24 @@ import { WorkspaceSkillsList } from "./WorkspaceSkillsList";
 import { WorkspaceHooksList } from "./WorkspaceHooksList";
 import type { WorkspaceMcpServer } from "@/lib/api/workspace";
 
-export const WorkspacePage: React.FC = () => {
+export type WorkspaceTab = "mcp" | "skills" | "hooks";
+
+interface WorkspacePageProps {
+  activeTab?: WorkspaceTab;
+  onActiveTabChange?: (tab: WorkspaceTab) => void;
+}
+
+export const WorkspacePage: React.FC<WorkspacePageProps> = ({
+  activeTab,
+  onActiveTabChange,
+}) => {
   const { t } = useTranslation();
-  const [activeTab, setActiveTab] = useState("mcp");
+  const [internalActiveTab, setInternalActiveTab] = useState<WorkspaceTab>("mcp");
   const [isFormOpen, setIsFormOpen] = useState(false);
   const [editingServer, setEditingServer] = useState<WorkspaceMcpServer | null>(
     null,
   );
+  const resolvedActiveTab = activeTab ?? internalActiveTab;
 
   const { data: mcpConfig, isLoading } = useWorkspaceMcpConfig();
   const { data: skills, isLoading: isLoadingSkills } = useWorkspaceSkills();
@@ -45,6 +56,12 @@ export const WorkspacePage: React.FC = () => {
 
   const handleSync = () => {
     syncMutation.mutate();
+  };
+
+  const handleTabChange = (tab: string) => {
+    const nextTab = tab as WorkspaceTab;
+    setInternalActiveTab(nextTab);
+    onActiveTabChange?.(nextTab);
   };
 
   return (
@@ -83,26 +100,12 @@ export const WorkspacePage: React.FC = () => {
       {/* Content */}
       <div className="flex-1 overflow-hidden">
         <Tabs
-          value={activeTab}
-          onValueChange={setActiveTab}
+          value={resolvedActiveTab}
+          onValueChange={handleTabChange}
           className="h-full flex flex-col"
         >
-          <div className="px-6 pt-4">
-            <TabsList className="grid w-full grid-cols-3">
-              <TabsTrigger value="mcp">
-                {t("workspace.tabs.mcp", { defaultValue: "MCP 服务器" })}
-              </TabsTrigger>
-              <TabsTrigger value="skills">
-                {t("workspace.tabs.skills", { defaultValue: "Skills" })}
-              </TabsTrigger>
-              <TabsTrigger value="hooks">
-                {t("workspace.tabs.hooks", { defaultValue: "Hooks" })}
-              </TabsTrigger>
-            </TabsList>
-          </div>
-
           <div className="flex-1 overflow-hidden px-6 pb-6">
-            <TabsContent value="mcp" className="h-full mt-4">
+            <TabsContent value="mcp" className="h-full mt-4 data-[state=inactive]:hidden">
               <div className="h-full flex flex-col">
                 <div className="flex items-center justify-between mb-4">
                   <p className="text-sm text-muted-foreground">
@@ -126,7 +129,10 @@ export const WorkspacePage: React.FC = () => {
               </div>
             </TabsContent>
 
-            <TabsContent value="skills" className="h-full mt-4">
+            <TabsContent
+              value="skills"
+              className="h-full mt-4 data-[state=inactive]:hidden"
+            >
               <div className="h-full flex flex-col">
                 <div className="flex items-center justify-between mb-4">
                   <p className="text-sm text-muted-foreground">
@@ -146,7 +152,10 @@ export const WorkspacePage: React.FC = () => {
               </div>
             </TabsContent>
 
-            <TabsContent value="hooks" className="h-full mt-4">
+            <TabsContent
+              value="hooks"
+              className="h-full mt-4 data-[state=inactive]:hidden"
+            >
               <div className="h-full flex flex-col">
                 <div className="flex items-center justify-between mb-4">
                   <p className="text-sm text-muted-foreground">

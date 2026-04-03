@@ -63,6 +63,7 @@ import { McpIcon } from "@/components/BrandIcons";
 import { Button } from "@/components/ui/button";
 import { SessionManagerPage } from "@/components/sessions/SessionManagerPage";
 import { WorkspacePage } from "@/components/workspace/WorkspacePage";
+import type { WorkspaceTab } from "@/components/workspace/WorkspacePage";
 import {
   useDisableCurrentOmo,
   useDisableCurrentOmoSlim,
@@ -84,6 +85,7 @@ type View =
   | "universal"
   | "sessions"
   | "workspace"
+  | "openclawWorkspace"
   | "openclawEnv"
   | "openclawTools"
   | "openclawAgents";
@@ -140,12 +142,22 @@ const getInitialView = (): View => {
   return "providers";
 };
 
+const MAIN_SHELL_VIEWS: View[] = [
+  "providers",
+  "workspace",
+  "openclawWorkspace",
+  "openclawEnv",
+  "openclawTools",
+  "openclawAgents",
+];
+
 function App() {
   const { t } = useTranslation();
   const queryClient = useQueryClient();
 
   const [activeApp, setActiveApp] = useState<AppId>(getInitialApp);
   const [currentView, setCurrentView] = useState<View>(getInitialView);
+  const [workspaceTab, setWorkspaceTab] = useState<WorkspaceTab>("mcp");
   const [settingsDefaultTab, setSettingsDefaultTab] = useState("general");
   const [isAddOpen, setIsAddOpen] = useState(false);
 
@@ -199,6 +211,7 @@ function App() {
   } | null>(null);
   const [envConflicts, setEnvConflicts] = useState<EnvConflict[]>([]);
   const [showEnvBanner, setShowEnvBanner] = useState(false);
+  const showMainShellHeader = MAIN_SHELL_VIEWS.includes(currentView);
 
   const effectiveEditingProvider = useLastValidValue(editingProvider);
   const effectiveUsageProvider = useLastValidValue(usageProvider);
@@ -212,6 +225,12 @@ function App() {
   const unifiedSkillsPanelRef = useRef<any>(null);
   const addActionButtonClass =
     "bg-orange-500 hover:bg-orange-600 dark:bg-orange-500 dark:hover:bg-orange-600 text-white shadow-lg shadow-orange-500/30 dark:shadow-orange-500/40 rounded-full w-8 h-8";
+  const secondaryNavButtonClass = (active: boolean) =>
+    cn(
+      "text-muted-foreground hover:text-foreground hover:bg-black/5 dark:hover:bg-white/5",
+      "transition-all duration-200 ease-in-out overflow-hidden",
+      active && "bg-background text-foreground shadow-sm hover:bg-background",
+    );
 
   const {
     isRunning: isProxyRunning,
@@ -744,7 +763,14 @@ function App() {
         case "sessions":
           return <SessionManagerPage key={activeApp} appId={activeApp} />;
         case "workspace":
-          return <WorkspacePage />;
+          return (
+            <WorkspacePage
+              activeTab={workspaceTab}
+              onActiveTabChange={setWorkspaceTab}
+            />
+          );
+        case "openclawWorkspace":
+          return <WorkspaceFilesPanel />;
         case "openclawEnv":
           return <EnvPanel />;
         case "openclawTools":
@@ -885,7 +911,7 @@ function App() {
             className="flex items-center gap-1"
             style={{ WebkitAppRegion: "no-drag" } as any}
           >
-            {currentView !== "providers" ? (
+            {!showMainShellHeader ? (
               <div className="flex items-center gap-2">
                 <Button
                   variant="outline"
@@ -914,12 +940,6 @@ function App() {
                       defaultValue: "统一供应商",
                     })}
                   {currentView === "sessions" && t("sessionManager.title")}
-                  {currentView === "workspace" &&
-                    t("workspace.title", { defaultValue: "工作区管理" })}
-                  {currentView === "openclawEnv" && t("openclaw.env.title")}
-                  {currentView === "openclawTools" && t("openclaw.tools.title")}
-                  {currentView === "openclawAgents" &&
-                    t("openclaw.agents.title")}
                 </h1>
               </div>
             ) : (
@@ -997,6 +1017,28 @@ function App() {
               ref={toolbarRef}
               className="flex flex-1 min-w-0 overflow-x-hidden items-center"
             >
+              {(currentView === "providers" || currentView === "workspace") && (
+                <div
+                  className="flex shrink-0 items-center"
+                  style={{ WebkitAppRegion: "no-drag" } as any}
+                >
+                  <AppSwitcher
+                    activeApp={activeApp}
+                    onSwitch={(app) => {
+                      setActiveApp(app);
+                      setCurrentView("providers");
+                    }}
+                    isWorkspaceActive={currentView === "workspace"}
+                    onOpenWorkspace={() => {
+                      setWorkspaceTab("mcp");
+                      setCurrentView("workspace");
+                    }}
+                    visibleApps={visibleApps}
+                    compact={isToolbarCompact}
+                  />
+                </div>
+              )}
+
               <div
                 className="flex shrink-0 items-center gap-1.5 ml-auto"
                 style={{ WebkitAppRegion: "no-drag" } as any}
@@ -1102,20 +1144,58 @@ function App() {
                     </Button>
                   </>
                 )}
+                {currentView === "workspace" && (
+                  <div className="flex items-center gap-1 p-1 bg-muted rounded-xl">
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      onClick={() => setWorkspaceTab("skills")}
+                      className={secondaryNavButtonClass(
+                        workspaceTab === "skills",
+                      )}
+                      title={t("workspace.tabs.skills", {
+                        defaultValue: "Skills",
+                      })}
+                    >
+                      <Wrench className="flex-shrink-0 w-4 h-4" />
+                    </Button>
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      onClick={() => setWorkspaceTab("mcp")}
+                      className={secondaryNavButtonClass(
+                        workspaceTab === "mcp",
+                      )}
+                      title={t("workspace.tabs.mcp", {
+                        defaultValue: "MCP 服务器",
+                      })}
+                    >
+                      <McpIcon size={16} />
+                    </Button>
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      onClick={() => setWorkspaceTab("hooks")}
+                      className={secondaryNavButtonClass(
+                        workspaceTab === "hooks",
+                      )}
+                      title={t("workspace.tabs.hooks", {
+                        defaultValue: "Hooks",
+                      })}
+                    >
+                      <FolderOpen className="w-4 h-4" />
+                    </Button>
+                  </div>
+                )}
                 {currentView === "providers" && (
                   <>
-                    <AppSwitcher
-                      activeApp={activeApp}
-                      onSwitch={setActiveApp}
-                      visibleApps={visibleApps}
-                      compact={isToolbarCompact}
-                    />
-
                     <div className="flex items-center gap-1 p-1 bg-muted rounded-xl">
                       <AnimatePresence mode="wait">
                         <motion.div
                           key={
-                            activeApp === "openclaw" ? "openclaw" : "default"
+                            activeApp === "openclaw"
+                              ? "openclaw"
+                              : "default"
                           }
                           className="flex items-center gap-1"
                           initial={{ opacity: 0 }}
@@ -1128,9 +1208,13 @@ function App() {
                               <Button
                                 variant="ghost"
                                 size="sm"
-                                onClick={() => setCurrentView("workspace")}
+                                onClick={() =>
+                                  setCurrentView("openclawWorkspace")
+                                }
                                 className="text-muted-foreground hover:text-foreground hover:bg-black/5 dark:hover:bg-white/5"
-                                title={t("workspace.manage")}
+                                title={t("workspace.filesTitle", {
+                                  defaultValue: "OpenClaw 工作区文件",
+                                })}
                               >
                                 <FolderOpen className="w-4 h-4" />
                               </Button>

@@ -61,6 +61,32 @@ export function OpenClawIcon({ size = 16, className = "" }: IconProps) {
   );
 }
 
+export function WorkspaceSyncIcon({ size = 16, className = "" }: IconProps) {
+  const tileSize = Math.max(6, Math.floor(size * 0.5));
+  const tileClassName = "rounded-[4px] bg-background/90 p-[1px] shadow-sm";
+
+  return (
+    <span
+      className={`relative inline-grid grid-cols-2 gap-[2px] ${className}`}
+      style={{ width: size, height: size }}
+      aria-hidden="true"
+    >
+      <span className={tileClassName}>
+        <ClaudeIcon size={tileSize} />
+      </span>
+      <span className={tileClassName}>
+        <CodexIcon size={tileSize} />
+      </span>
+      <span className={tileClassName}>
+        <GeminiIcon size={tileSize} />
+      </span>
+      <span className={tileClassName}>
+        <OpenClawIcon size={tileSize} />
+      </span>
+    </span>
+  );
+}
+
 // MCP icon uses inline SVG to support currentColor for hover effects
 export function McpIcon({ size = 16, className = "" }: IconProps) {
   return (
