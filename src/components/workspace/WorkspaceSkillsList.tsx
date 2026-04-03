@@ -7,6 +7,8 @@ import type { WorkspaceSkill } from "@/lib/api/workspace";
 import type { AppId } from "@/lib/api/types";
 import { toast } from "sonner";
 
+const WORKSPACE_APP_IDS: AppId[] = ["claude", "codex", "gemini", "opencode"];
+
 interface WorkspaceSkillsListProps {
   skills: WorkspaceSkill[];
   isLoading: boolean;
@@ -97,7 +99,9 @@ export const WorkspaceSkillsList: React.FC<WorkspaceSkillsListProps> = ({
                 codex: skill.apps.codex,
                 gemini: skill.apps.gemini,
                 opencode: skill.apps.opencode,
+                openclaw: false,
               }}
+              appIds={WORKSPACE_APP_IDS}
               onToggle={(app: AppId, enabled: boolean) => {
                 handleToggleApp(skill, app, enabled);
               }}

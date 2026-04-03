@@ -8,6 +8,8 @@ import type { WorkspaceMcpServer } from "@/lib/api/workspace";
 import type { AppId } from "@/lib/api/types";
 import { toast } from "sonner";
 
+const WORKSPACE_APP_IDS: AppId[] = ["claude", "codex", "gemini", "opencode"];
+
 interface WorkspaceMcpListProps {
   servers: WorkspaceMcpServer[];
   isLoading: boolean;
@@ -124,7 +126,9 @@ export const WorkspaceMcpList: React.FC<WorkspaceMcpListProps> = ({
                     codex: server.apps?.codex ?? false,
                     gemini: server.apps?.gemini ?? false,
                     opencode: server.apps?.opencode ?? false,
+                    openclaw: false,
                   }}
+                  appIds={WORKSPACE_APP_IDS}
                   onToggle={(app: AppId, enabled: boolean) => {
                     onEdit({
                       ...server,
