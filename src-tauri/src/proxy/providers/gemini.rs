@@ -9,6 +9,7 @@
 use super::{AuthInfo, AuthStrategy, ProviderAdapter, ProviderType};
 use crate::provider::Provider;
 use crate::proxy::error::ProxyError;
+use axum::http;
 
 /// Gemini 适配器
 pub struct GeminiAdapter;

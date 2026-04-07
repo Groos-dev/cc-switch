@@ -40,6 +40,10 @@ toml = "0.8"
 toml_edit = "0.22"
 reqwest = { version = "0.12", features = ["rustls-tls", "json", "stream", "socks", "gzip"] }
 tokio = { version = "1", features = ["macros", "rt-multi-thread", "time", "sync"] }
+tokio-rustls = "0.26"
+rustls = "0.23"
+rustls-native-certs = "0.8"
+webpki-roots = "1"
 futures = "0.3"
 async-stream = "0.3"
 bytes = "1.5"
@@ -47,6 +51,10 @@ axum = "0.7"
 tower = "0.4"
 tower-http = { version = "0.5", features = ["cors"] }
 hyper = { version = "1.0", features = ["full"] }
+hyper-util = { version = "0.1", features = ["client", "client-legacy", "http1", "server", "tokio"] }
+hyper-rustls = "0.27"
+http-body-util = "0.1"
+httparse = "1.9"
 regex = "1.10"
 rquickjs = { version = "0.8", features = ["array-buffer", "classes"] }
 thiserror = "2.0"
@@ -63,6 +71,8 @@ indexmap = { version = "2", features = ["serde"] }
 rust_decimal = "1.33"
 uuid = { version = "1.11", features = ["v4"] }
 sha2 = "0.10"
+brotli = "7"
+flate2 = "1"
 json5 = "0.4"
 json-five = "0.3.1"
 

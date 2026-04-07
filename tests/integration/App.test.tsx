@@ -75,8 +75,11 @@ vi.mock("@/components/providers/EditProviderDialog", () => ({
         <button
           onClick={() =>
             onSubmit({
-              ...provider,
-              name: `${provider.name}-edited`,
+              provider: {
+                ...provider,
+                name: `${provider.name}-edited`,
+              },
+              originalId: provider.id,
             })
           }
         >
@@ -208,6 +211,30 @@ describe("App integration with MSW", () => {
 
     expect(toastErrorMock).not.toHaveBeenCalled();
     expect(toastSuccessMock).toHaveBeenCalled();
+  });
+
+  it("accepts edit dialog payloads shaped as { provider, originalId }", async () => {
+    const { default: App } = await import("@/App");
+    renderApp(App);
+
+    await waitFor(() =>
+      expect(screen.getByTestId("provider-list").textContent).toContain(
+        "claude-1",
+      ),
+    );
+
+    fireEvent.click(screen.getByText("edit"));
+    fireEvent.click(screen.getByText("confirm-edit"));
+
+    await waitFor(() =>
+      expect(screen.getByTestId("provider-list").textContent).toMatch(
+        /-edited/,
+      ),
+    );
+
+    expect(toastErrorMock).not.toHaveBeenCalledWith(
+      expect.stringContaining("missing field `id`"),
+    );
   });
 
   it("shows toast when auto sync fails in background", async () => {

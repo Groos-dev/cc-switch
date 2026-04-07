@@ -8,6 +8,9 @@
 //! - system prompt 使用 `instructions` 字段而非 system role message
 //! - usage 字段命名与 Anthropic 一致 (input_tokens/output_tokens)
 
+use crate::proxy::codex_continuation_bridge::{
+    PRIVATE_PREVIOUS_RESPONSE_ID_FIELD, PRIVATE_PROMPT_CACHE_KEY_FIELD,
+};
 use crate::proxy::error::ProxyError;
 use serde_json::{json, Value};
 
@@ -16,6 +19,14 @@ use serde_json::{json, Value};
 /// `cache_key`: optional prompt_cache_key to inject for improved cache routing
 pub fn anthropic_to_responses(body: Value, cache_key: Option<&str>) -> Result<Value, ProxyError> {
     let mut result = json!({});
+    let private_prompt_cache_key = body
+        .get(PRIVATE_PROMPT_CACHE_KEY_FIELD)
+        .and_then(|v| v.as_str())
+        .map(ToOwned::to_owned);
+    let previous_response_id = body
+        .get(PRIVATE_PREVIOUS_RESPONSE_ID_FIELD)
+        .and_then(|v| v.as_str())
+        .map(ToOwned::to_owned);
 
     // NOTE: 模型映射由上游统一处理（proxy::model_mapper），格式转换层只做结构转换。
     if let Some(model) = body.get("model").and_then(|m| m.as_str()) {
@@ -99,8 +110,11 @@ pub fn anthropic_to_responses(body: Value, cache_key: Option<&str>) -> Result<Va
     }
 
     // Inject prompt_cache_key for improved cache routing on OpenAI-compatible endpoints
-    if let Some(key) = cache_key {
+    if let Some(key) = private_prompt_cache_key.as_deref().or(cache_key) {
         result["prompt_cache_key"] = json!(key);
+    }
+    if let Some(previous_response_id) = previous_response_id {
+        result["previous_response_id"] = json!(previous_response_id);
     }
 
     Ok(result)
@@ -820,6 +834,32 @@ mod tests {
 
         let result = anthropic_to_responses(input, Some("my-provider-id")).unwrap();
         assert_eq!(result["prompt_cache_key"], "my-provider-id");
+    }
+
+    #[test]
+    fn test_anthropic_to_responses_prefers_private_prompt_cache_key() {
+        let input = json!({
+            "model": "gpt-4o",
+            "max_tokens": 1024,
+            "messages": [{"role": "user", "content": "Hello"}],
+            "_cc_switch_prompt_cache_key": "conversation-cache-key"
+        });
+
+        let result = anthropic_to_responses(input, Some("provider-fallback")).unwrap();
+        assert_eq!(result["prompt_cache_key"], "conversation-cache-key");
+    }
+
+    #[test]
+    fn test_anthropic_to_responses_with_previous_response_id() {
+        let input = json!({
+            "model": "gpt-4o",
+            "max_tokens": 1024,
+            "messages": [{"role": "user", "content": "Hello"}],
+            "_cc_switch_previous_response_id": "resp_123"
+        });
+
+        let result = anthropic_to_responses(input, Some("my-provider-id")).unwrap();
+        assert_eq!(result["previous_response_id"], "resp_123");
     }
 
     #[test]

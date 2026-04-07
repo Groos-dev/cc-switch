@@ -13,6 +13,9 @@ use bytes::Bytes;
 use futures::stream::{Stream, StreamExt};
 use serde_json::{json, Value};
 use std::collections::{HashMap, HashSet};
+use std::sync::Arc;
+
+pub type ResponseCreatedTap = Arc<dyn Fn(&str, Option<&str>) + Send + Sync>;
 
 #[inline]
 fn response_object_from_event(data: &Value) -> &Value {
@@ -97,6 +100,7 @@ fn resolve_content_index(
 /// SSE 解析支持 named events (event: + data: 行)
 pub fn create_anthropic_sse_stream_from_responses(
     stream: impl Stream<Item = Result<Bytes, reqwest::Error>> + Send + 'static,
+    response_created_tap: Option<ResponseCreatedTap>,
 ) -> impl Stream<Item = Result<Bytes, std::io::Error>> + Send {
     async_stream::stream! {
         let mut buffer = String::new();
@@ -163,13 +167,18 @@ pub fn create_anthropic_sse_stream_from_responses(
                                 let response_obj = response_object_from_event(&data);
                                 if let Some(id) = response_obj.get("id").and_then(|i| i.as_str()) {
                                     message_id = Some(id.to_string());
+                                    if let Some(tap) = response_created_tap.as_ref() {
+                                        tap(
+                                            id,
+                                            response_obj.get("model").and_then(|m| m.as_str()),
+                                        );
+                                    }
                                 }
                                 if let Some(model) =
                                     response_obj.get("model").and_then(|m| m.as_str())
                                 {
                                     current_model = Some(model.to_string());
                                 }
-
                                 has_sent_message_start = true;
                                 // Build usage with cache tokens if available
                                 let start_usage = build_anthropic_usage_from_responses(
@@ -742,6 +751,18 @@ mod tests {
         assert_eq!(obj["model"], "gpt-4o");
     }
 
+    #[test]
+    fn test_response_object_from_event_without_wrapper() {
+        let data = json!({
+            "type": "response.created",
+            "id": "resp_direct",
+            "model": "gpt-4o-mini"
+        });
+        let obj = response_object_from_event(&data);
+        assert_eq!(obj["id"], "resp_direct");
+        assert_eq!(obj["model"], "gpt-4o-mini");
+    }
+
     #[tokio::test]
     async fn test_streaming_conversion_with_wrapped_response_events() {
         let input = concat!(
@@ -758,7 +779,7 @@ mod tests {
         );
 
         let upstream = stream::iter(vec![Ok(Bytes::from(input.as_bytes().to_vec()))]);
-        let converted = create_anthropic_sse_stream_from_responses(upstream);
+        let converted = create_anthropic_sse_stream_from_responses(upstream, None);
         let chunks: Vec<_> = converted.collect().await;
 
         let merged = chunks
@@ -800,7 +821,7 @@ mod tests {
         );
 
         let upstream = stream::iter(vec![Ok(Bytes::from(input.as_bytes().to_vec()))]);
-        let converted = create_anthropic_sse_stream_from_responses(upstream);
+        let converted = create_anthropic_sse_stream_from_responses(upstream, None);
         let chunks: Vec<_> = converted.collect().await;
         let merged = chunks
             .into_iter()
@@ -869,7 +890,7 @@ mod tests {
         );
 
         let upstream = stream::iter(vec![Ok(Bytes::from(input.as_bytes().to_vec()))]);
-        let converted = create_anthropic_sse_stream_from_responses(upstream);
+        let converted = create_anthropic_sse_stream_from_responses(upstream, None);
         let chunks: Vec<_> = converted.collect().await;
         let merged = chunks
             .into_iter()
@@ -898,5 +919,39 @@ mod tests {
             "should contain text delta"
         );
         assert!(merged.contains("\"stop_reason\":\"end_turn\""));
+    }
+
+    #[tokio::test]
+    async fn test_streaming_conversion_with_unwrapped_response_objects() {
+        let input = concat!(
+            "event: response.created\n",
+            "data: {\"type\":\"response.created\",\"id\":\"resp_direct\",\"model\":\"gpt-4o-mini\",\"usage\":{\"input_tokens\":7,\"output_tokens\":0}}\n\n",
+            "event: response.content_part.added\n",
+            "data: {\"type\":\"response.content_part.added\",\"part\":{\"type\":\"output_text\",\"text\":\"\"},\"output_index\":0,\"content_index\":0}\n\n",
+            "event: response.output_text.delta\n",
+            "data: {\"type\":\"response.output_text.delta\",\"delta\":\"Hi\",\"output_index\":0,\"content_index\":0}\n\n",
+            "event: response.content_part.done\n",
+            "data: {\"type\":\"response.content_part.done\",\"output_index\":0,\"content_index\":0}\n\n",
+            "event: response.completed\n",
+            "data: {\"type\":\"response.completed\",\"status\":\"completed\",\"usage\":{\"input_tokens\":7,\"output_tokens\":2}}\n\n"
+        );
+
+        let upstream = stream::iter(vec![Ok(Bytes::from(input.as_bytes().to_vec()))]);
+        let converted = create_anthropic_sse_stream_from_responses(upstream, None);
+        let chunks: Vec<_> = converted.collect().await;
+        let merged = chunks
+            .into_iter()
+            .map(|c| String::from_utf8_lossy(c.unwrap().as_ref()).to_string())
+            .collect::<String>();
+
+        assert!(merged.contains("\"type\":\"message_start\""));
+        assert!(merged.contains("\"id\":\"resp_direct\""));
+        assert!(merged.contains("\"model\":\"gpt-4o-mini\""));
+        assert!(merged.contains("\"type\":\"text_delta\""));
+        assert!(merged.contains("\"text\":\"Hi\""));
+        assert!(merged.contains("\"input_tokens\":7"));
+        assert!(merged.contains("\"output_tokens\":2"));
+        assert!(merged.contains("\"stop_reason\":\"end_turn\""));
+        assert!(merged.contains("\"type\":\"message_stop\""));
     }
 }

@@ -349,11 +349,23 @@ impl ProviderAdapter for ClaudeAdapter {
             // GitHub Copilot: Bearer + 统一指纹头
             AuthStrategy::GitHubCopilot => request
                 .header("Authorization", format!("Bearer {}", auth.api_key))
-                .header("editor-version", super::copilot_auth::COPILOT_EDITOR_VERSION)
-                .header("editor-plugin-version", super::copilot_auth::COPILOT_PLUGIN_VERSION)
-                .header("copilot-integration-id", super::copilot_auth::COPILOT_INTEGRATION_ID)
+                .header(
+                    "editor-version",
+                    super::copilot_auth::COPILOT_EDITOR_VERSION,
+                )
+                .header(
+                    "editor-plugin-version",
+                    super::copilot_auth::COPILOT_PLUGIN_VERSION,
+                )
+                .header(
+                    "copilot-integration-id",
+                    super::copilot_auth::COPILOT_INTEGRATION_ID,
+                )
                 .header("user-agent", super::copilot_auth::COPILOT_USER_AGENT)
-                .header("x-github-api-version", super::copilot_auth::COPILOT_API_VERSION)
+                .header(
+                    "x-github-api-version",
+                    super::copilot_auth::COPILOT_API_VERSION,
+                )
                 .header("openai-intent", "conversation-panel"),
             _ => request,
         }
@@ -380,18 +392,19 @@ impl ProviderAdapter for ClaudeAdapter {
         body: serde_json::Value,
         provider: &Provider,
     ) -> Result<serde_json::Value, ProxyError> {
-        // Use meta.prompt_cache_key if set by user, otherwise fall back to provider.id
-        let cache_key = provider
+        let explicit_cache_key = provider
             .meta
             .as_ref()
-            .and_then(|m| m.prompt_cache_key.as_deref())
-            .unwrap_or(&provider.id);
+            .and_then(|m| m.prompt_cache_key.as_deref());
 
         match self.get_api_format(provider) {
             "openai_responses" => {
-                super::transform_responses::anthropic_to_responses(body, Some(cache_key))
+                super::transform_responses::anthropic_to_responses(body, explicit_cache_key)
             }
-            _ => super::transform::anthropic_to_openai(body, Some(cache_key)),
+            _ => {
+                let cache_key = explicit_cache_key.unwrap_or(&provider.id);
+                super::transform::anthropic_to_openai(body, Some(cache_key))
+            }
         }
     }
 
@@ -796,5 +809,62 @@ mod tests {
 
         // GitHub Copilot always needs transform
         assert!(adapter.needs_transform(&copilot));
+    }
+
+    #[test]
+    fn test_transform_request_openai_responses_uses_meta_prompt_cache_key_override() {
+        let adapter = ClaudeAdapter::new();
+        let provider = create_provider_with_meta(
+            json!({
+                "env": {
+                    "ANTHROPIC_BASE_URL": "https://api.example.com"
+                }
+            }),
+            ProviderMeta {
+                api_format: Some("openai_responses".to_string()),
+                prompt_cache_key: Some("conversation-cache-key".to_string()),
+                ..Default::default()
+            },
+        );
+
+        let body = json!({
+            "model": "gpt-5",
+            "max_tokens": 64,
+            "messages": [{"role": "user", "content": "Hello"}]
+        });
+
+        let result = adapter.transform_request(body, &provider).unwrap();
+
+        assert_eq!(result["prompt_cache_key"], "conversation-cache-key");
+        assert_eq!(result["input"][0]["role"], "user");
+        assert_eq!(result["input"][0]["content"][0]["text"], "Hello");
+    }
+
+    #[test]
+    fn test_transform_request_openai_responses_falls_back_to_provider_id_cache_key() {
+        let adapter = ClaudeAdapter::new();
+        let provider = create_provider_with_meta(
+            json!({
+                "env": {
+                    "ANTHROPIC_BASE_URL": "https://api.example.com"
+                }
+            }),
+            ProviderMeta {
+                api_format: Some("openai_responses".to_string()),
+                ..Default::default()
+            },
+        );
+
+        let body = json!({
+            "model": "gpt-5",
+            "max_tokens": 64,
+            "messages": [{"role": "user", "content": "Hello"}]
+        });
+
+        let result = adapter.transform_request(body, &provider).unwrap();
+
+        assert_eq!(result["prompt_cache_key"], "test");
+        assert_eq!(result["input"][0]["role"], "user");
+        assert_eq!(result["input"][0]["content"][0]["text"], "Hello");
     }
 }

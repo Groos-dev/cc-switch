@@ -4,6 +4,7 @@
 
 use super::{
     body_filter::filter_private_params_with_whitelist,
+    codex_continuation_bridge::prepare_claude_responses_request,
     error::*,
     failover_switch::FailoverSwitchManager,
     log_codes::fwd as log_fwd,
@@ -150,6 +151,7 @@ impl RequestForwarder {
         body: Value,
         headers: axum::http::HeaderMap,
         providers: Vec<Provider>,
+        session_id: &str,
     ) -> Result<ForwardResult, ForwardError> {
         // 获取适配器
         let adapter = get_adapter(app_type);
@@ -226,6 +228,7 @@ impl RequestForwarder {
                     &provider_body,
                     &headers,
                     adapter.as_ref(),
+                    session_id,
                 )
                 .await
             {
@@ -354,6 +357,7 @@ impl RequestForwarder {
                                         &provider_body,
                                         &headers,
                                         adapter.as_ref(),
+                                        session_id,
                                     )
                                     .await
                                 {
@@ -551,6 +555,7 @@ impl RequestForwarder {
                                     &provider_body,
                                     &headers,
                                     adapter.as_ref(),
+                                    session_id,
                                 )
                                 .await
                             {
@@ -788,6 +793,7 @@ impl RequestForwarder {
         body: &Value,
         headers: &axum::http::HeaderMap,
         adapter: &dyn ProviderAdapter,
+        session_id: &str,
     ) -> Result<Response, ProxyError> {
         // 使用适配器提取 base_url
         let base_url = adapter.extract_base_url(provider)?;
@@ -829,7 +835,11 @@ impl RequestForwarder {
             super::model_mapper::apply_model_mapping(body.clone(), provider);
 
         // 与 CCH 对齐：请求前不做 thinking 主动改写（仅保留兼容入口）
-        let mapped_body = normalize_thinking_type(mapped_body);
+        let mut mapped_body = normalize_thinking_type(mapped_body);
+
+        if needs_transform && adapter.name() == "Claude" && effective_endpoint == "/v1/responses" {
+            prepare_claude_responses_request(&mut mapped_body, provider, session_id);
+        }
 
         // 转换请求体（如果需要）
         let request_body = if needs_transform {
@@ -837,6 +847,7 @@ impl RequestForwarder {
         } else {
             mapped_body
         };
+        let request_body = request_body;
 
         // 过滤私有参数（以 `_` 开头的字段），防止内部信息泄露到上游
         // 默认使用空白名单，过滤所有 _ 前缀字段
@@ -992,11 +1003,15 @@ impl RequestForwarder {
             .and_then(|v| v.as_str())
             .unwrap_or("<none>");
         log::info!("[{tag}] >>> 请求 URL: {url} (model={request_model})");
-        if let Ok(body_str) = serde_json::to_string(&filtered_body) {
-            log::debug!(
-                "[{tag}] >>> 请求体内容 ({}字节): {}",
-                body_str.len(),
-                body_str
+        if tag == "Claude" {
+            log::info!(
+                "[{tag}] >>> 请求 JSON 结构: {}",
+                describe_json_shape(&filtered_body)
+            );
+        } else {
+            log::info!(
+                "[{tag}] >>> 请求参数摘要: {}",
+                summarize_request_body(&filtered_body)
             );
         }
 
@@ -1046,6 +1061,95 @@ impl RequestForwarder {
             ProxyError::NoAvailableProvider => ErrorCategory::NonRetryable,
             // 其他错误（数据库/内部错误等）：不是换供应商能解决的问题
             _ => ErrorCategory::NonRetryable,
+        }
+    }
+}
+
+fn summarize_request_body(body: &Value) -> String {
+    let mut parts = Vec::new();
+
+    if let Some(model) = body.get("model").and_then(|v| v.as_str()) {
+        parts.push(format!("model={model}"));
+    }
+    if let Some(stream) = body.get("stream").and_then(|v| v.as_bool()) {
+        parts.push(format!("stream={stream}"));
+    }
+    if let Some(max_tokens) = body.get("max_tokens").and_then(|v| v.as_u64()) {
+        parts.push(format!("max_tokens={max_tokens}"));
+    }
+    if let Some(max_output_tokens) = body.get("max_output_tokens").and_then(|v| v.as_u64()) {
+        parts.push(format!("max_output_tokens={max_output_tokens}"));
+    }
+    if let Some(temperature) = body.get("temperature") {
+        parts.push(format!("temperature={temperature}"));
+    }
+    if let Some(top_p) = body.get("top_p") {
+        parts.push(format!("top_p={top_p}"));
+    }
+    if let Some(reasoning) = body.get("reasoning") {
+        parts.push(format!("reasoning={reasoning}"));
+    }
+    if let Some(tool_choice) = body.get("tool_choice") {
+        parts.push(format!("tool_choice={tool_choice}"));
+    }
+    if let Some(tools) = body.get("tools").and_then(|v| v.as_array()) {
+        parts.push(format!("tools={}", tools.len()));
+    }
+    if let Some(messages) = body.get("messages").and_then(|v| v.as_array()) {
+        parts.push(format!("messages={}", messages.len()));
+    }
+    if let Some(input) = body.get("input").and_then(|v| v.as_array()) {
+        parts.push(format!("input={}", input.len()));
+    }
+    if let Some(instructions) = body.get("instructions").and_then(|v| v.as_str()) {
+        parts.push(format!("instructions_len={}", instructions.chars().count()));
+    }
+    if let Some(system) = body.get("system") {
+        let system_len = match system {
+            Value::String(text) => text.chars().count(),
+            Value::Array(items) => items.len(),
+            _ => 0,
+        };
+        parts.push(format!("system_len={system_len}"));
+    }
+    if let Some(prompt_cache_key) = body.get("prompt_cache_key").and_then(|v| v.as_str()) {
+        parts.push(format!("prompt_cache_key={prompt_cache_key}"));
+    }
+    if let Some(previous_response_id) = body.get("previous_response_id").and_then(|v| v.as_str()) {
+        parts.push(format!("previous_response_id={previous_response_id}"));
+    }
+
+    if parts.is_empty() {
+        "<empty>".to_string()
+    } else {
+        parts.join(", ")
+    }
+}
+
+fn describe_json_shape(value: &Value) -> String {
+    match value {
+        Value::Null => "null".to_string(),
+        Value::Bool(_) => "boolean".to_string(),
+        Value::Number(_) => "number".to_string(),
+        Value::String(text) => format!("string(len={})", text.chars().count()),
+        Value::Array(items) => {
+            if items.is_empty() {
+                "array([])".to_string()
+            } else {
+                format!(
+                    "array(len={}, item={})",
+                    items.len(),
+                    describe_json_shape(&items[0])
+                )
+            }
+        }
+        Value::Object(map) => {
+            let mut entries = map
+                .iter()
+                .map(|(key, item)| format!("{key}:{}", describe_json_shape(item)))
+                .collect::<Vec<_>>();
+            entries.sort();
+            format!("{{{}}}", entries.join(", "))
         }
     }
 }

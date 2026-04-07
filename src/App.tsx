@@ -553,7 +553,12 @@ function App() {
     }
   };
 
-  const handleEditProvider = async (provider: Provider) => {
+  const handleEditProvider = async ({
+    provider,
+  }: {
+    provider: Provider;
+    originalId?: string;
+  }) => {
     await updateProvider(provider);
     setEditingProvider(null);
   };

@@ -5,6 +5,7 @@
 //! Falls back to hyper-util Client (title-case headers) when raw write is not feasible.
 
 use super::ProxyError;
+use axum::http;
 use bytes::Bytes;
 use futures::stream::Stream;
 use http_body_util::BodyExt;

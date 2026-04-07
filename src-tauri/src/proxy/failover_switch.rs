@@ -7,7 +7,9 @@
 
 use crate::database::Database;
 use crate::error::AppError;
+use crate::{app_config::AppType, services::provider::ProviderService};
 use std::collections::HashSet;
+use std::str::FromStr;
 use std::sync::Arc;
 use tauri::{Emitter, Manager};
 use tokio::sync::RwLock;
@@ -99,12 +101,15 @@ impl FailoverSwitchManager {
 
         if let Some(app) = app_handle {
             if let Some(app_state) = app.try_state::<crate::store::AppState>() {
-                switched = app_state
-                    .proxy_service
-                    .hot_switch_provider(app_type, provider_id)
-                    .await
-                    .map_err(AppError::Message)?
-                    .logical_target_changed;
+                let app_type_enum = AppType::from_str(app_type)
+                    .map_err(|_| AppError::Message(format!("无效的 app_type: {app_type}")))?;
+                let current_provider =
+                    crate::settings::get_current_provider(&app_type_enum).unwrap_or_default();
+                switched = current_provider != provider_id;
+
+                if switched {
+                    ProviderService::switch(app_state.inner(), app_type_enum, provider_id)?;
+                }
 
                 if !switched {
                     return Ok(false);

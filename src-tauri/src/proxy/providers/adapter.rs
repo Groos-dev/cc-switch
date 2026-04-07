@@ -5,6 +5,8 @@
 use super::auth::AuthInfo;
 use crate::provider::Provider;
 use crate::proxy::error::ProxyError;
+use axum::http;
+use reqwest::RequestBuilder;
 use serde_json::Value;
 
 /// 供应商适配器 Trait
@@ -30,7 +32,17 @@ pub trait ProviderAdapter: Send + Sync {
     ///
     /// The forwarder inserts these at the position of the original auth header
     /// so that header order is preserved.
-    fn get_auth_headers(&self, auth: &AuthInfo) -> Vec<(http::HeaderName, http::HeaderValue)>;
+    fn get_auth_headers(&self, _auth: &AuthInfo) -> Vec<(http::HeaderName, http::HeaderValue)> {
+        Vec::new()
+    }
+
+    fn add_auth_headers(&self, request: RequestBuilder, auth: &AuthInfo) -> RequestBuilder {
+        self.get_auth_headers(auth)
+            .into_iter()
+            .fold(request, |request, (name, value)| {
+                request.header(name, value)
+            })
+    }
 
     /// 是否需要格式转换
     fn needs_transform(&self, _provider: &Provider) -> bool {

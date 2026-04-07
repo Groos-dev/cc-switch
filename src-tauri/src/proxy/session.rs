@@ -5,11 +5,12 @@
 //! ## Session ID 提取
 //!
 //! 支持从客户端请求中提取 Session ID，用于关联同一对话的多个请求：
-//! - Claude: 从 `metadata.user_id` (格式: `user_xxx_session_yyy`) 或 `metadata.session_id` 提取
+//! - Claude: 优先从 `X-Claude-Code-Session-Id` 提取，再从 `metadata.user_id` / `metadata.session_id` 提取
 //! - Codex: 从 `previous_response_id` 或 headers 中的 `session_id` 提取
 //! - 其他: 生成新的 UUID
 
 use axum::http::HeaderMap;
+use serde_json::Value;
 use std::time::Instant;
 use uuid::Uuid;
 
@@ -221,9 +222,10 @@ pub struct SessionIdResult {
 /// ## 提取优先级
 ///
 /// ### Claude 请求
-/// 1. `metadata.user_id` (格式: `user_xxx_session_yyy`) → 提取 `yyy` 部分
-/// 2. `metadata.session_id` → 直接使用
-/// 3. 生成新 UUID
+/// 1. Header: `X-Claude-Code-Session-Id`
+/// 2. `metadata.user_id` (优先按 JSON 字符串解析 `session_id`，回退 legacy `_session_` 格式)
+/// 3. `metadata.session_id` → 直接使用
+/// 4. 生成新 UUID
 ///
 /// ### Codex 请求
 /// 1. Headers: `session_id` 或 `x-session-id`
@@ -242,6 +244,12 @@ pub fn extract_session_id(
     body: &serde_json::Value,
     client_format: &str,
 ) -> SessionIdResult {
+    if client_format == "claude" {
+        if let Some(result) = extract_claude_session(headers, body) {
+            return result;
+        }
+    }
+
     // Codex 请求特殊处理
     if client_format == "codex" || client_format == "openai" {
         if let Some(result) = extract_codex_session(headers, body) {
@@ -256,6 +264,27 @@ pub fn extract_session_id(
 
     // 兜底：生成新 Session ID
     generate_new_session_id()
+}
+
+/// 提取 Claude Session ID
+fn extract_claude_session(
+    headers: &HeaderMap,
+    body: &serde_json::Value,
+) -> Option<SessionIdResult> {
+    if let Some(value) = headers.get("x-claude-code-session-id") {
+        if let Ok(session_id) = value.to_str() {
+            let session_id = session_id.trim();
+            if !session_id.is_empty() {
+                return Some(SessionIdResult {
+                    session_id: session_id.to_string(),
+                    source: SessionIdSource::Header,
+                    client_provided: true,
+                });
+            }
+        }
+    }
+
+    extract_from_metadata(body)
 }
 
 /// 提取 Codex Session ID
@@ -309,7 +338,7 @@ fn extract_codex_session(headers: &HeaderMap, body: &serde_json::Value) -> Optio
 fn extract_from_metadata(body: &serde_json::Value) -> Option<SessionIdResult> {
     let metadata = body.get("metadata")?;
 
-    // 1. 从 metadata.user_id 提取（格式: user_xxx_session_yyy）
+    // 1. 从 metadata.user_id 提取（优先 JSON 字符串，回退 legacy `_session_` 格式）
     if let Some(user_id) = metadata.get("user_id").and_then(|v| v.as_str()) {
         if let Some(session_id) = parse_session_from_user_id(user_id) {
             return Some(SessionIdResult {
@@ -336,8 +365,31 @@ fn extract_from_metadata(body: &serde_json::Value) -> Option<SessionIdResult> {
 
 /// 从 user_id 解析 session_id
 ///
-/// 格式: `user_identifier_session_actual_session_id`
+/// 优先解析 Claude Code 现有 JSON 字符串格式：
+/// `{"session_id":"...","device_id":"...","account_uuid":"..."}`
+///
+/// 回退兼容 legacy 格式：
+/// `user_identifier_session_actual_session_id`
 fn parse_session_from_user_id(user_id: &str) -> Option<String> {
+    if let Some(session_id) = parse_session_from_user_id_json(user_id) {
+        return Some(session_id);
+    }
+
+    parse_session_from_legacy_user_id(user_id)
+}
+
+fn parse_session_from_user_id_json(user_id: &str) -> Option<String> {
+    let parsed: Value = serde_json::from_str(user_id).ok()?;
+    parsed
+        .get("session_id")
+        .or_else(|| parsed.get("sessionId"))
+        .and_then(|v| v.as_str())
+        .map(str::trim)
+        .filter(|v| !v.is_empty())
+        .map(ToOwned::to_owned)
+}
+
+fn parse_session_from_legacy_user_id(user_id: &str) -> Option<String> {
     // 查找 "_session_" 分隔符
     if let Some(pos) = user_id.find("_session_") {
         let session_id = &user_id[pos + 9..]; // "_session_" 长度为 9
@@ -498,6 +550,48 @@ mod tests {
     }
 
     #[test]
+    fn test_extract_session_from_claude_header_takes_priority() {
+        let mut headers = HeaderMap::new();
+        headers.insert(
+            "x-claude-code-session-id",
+            "claude-session-header-123".parse().unwrap(),
+        );
+
+        let body = json!({
+            "model": "claude-3-5-sonnet",
+            "messages": [{"role": "user", "content": "Hello"}],
+            "metadata": {
+                "user_id": "{\"session_id\":\"metadata-session-456\",\"device_id\":\"dev-1\",\"account_uuid\":\"acct-1\"}",
+                "session_id": "metadata-fallback"
+            }
+        });
+
+        let result = extract_session_id(&headers, &body, "claude");
+
+        assert_eq!(result.session_id, "claude-session-header-123");
+        assert_eq!(result.source, SessionIdSource::Header);
+        assert!(result.client_provided);
+    }
+
+    #[test]
+    fn test_extract_session_from_claude_metadata_user_id_json() {
+        let headers = HeaderMap::new();
+        let body = json!({
+            "model": "claude-3-5-sonnet",
+            "messages": [{"role": "user", "content": "Hello"}],
+            "metadata": {
+                "user_id": "{\"session_id\":\"json-session-123\",\"device_id\":\"device-123\",\"account_uuid\":\"acct-123\"}"
+            }
+        });
+
+        let result = extract_session_id(&headers, &body, "claude");
+
+        assert_eq!(result.session_id, "json-session-123");
+        assert_eq!(result.source, SessionIdSource::MetadataUserId);
+        assert!(result.client_provided);
+    }
+
+    #[test]
     fn test_extract_session_from_claude_metadata_session_id() {
         let headers = HeaderMap::new();
         let body = json!({
@@ -547,6 +641,10 @@ mod tests {
 
     #[test]
     fn test_parse_session_from_user_id() {
+        assert_eq!(
+            parse_session_from_user_id("{\"session_id\":\"json-abc123\",\"device_id\":\"dev-1\",\"account_uuid\":\"acct-1\"}"),
+            Some("json-abc123".to_string())
+        );
         assert_eq!(
             parse_session_from_user_id("user_john_session_abc123"),
             Some("abc123".to_string())

@@ -8,15 +8,19 @@
 //! - Claude 的格式转换逻辑保留在此文件（用于 OpenRouter 旧接口回退）
 
 use super::{
+    codex_continuation_bridge::{
+        bridge_metadata_for_responses_request, persist_responses_response, BridgeMetadata,
+    },
     error_mapper::{get_error_message, map_proxy_error_to_status},
     handler_config::{
         CLAUDE_PARSER_CONFIG, CODEX_PARSER_CONFIG, GEMINI_PARSER_CONFIG, OPENAI_PARSER_CONFIG,
     },
     handler_context::RequestContext,
     providers::{
-        get_adapter, get_claude_api_format, streaming::create_anthropic_sse_stream,
-        streaming_responses::create_anthropic_sse_stream_from_responses, transform,
-        transform_responses,
+        get_adapter, get_claude_api_format,
+        streaming::create_anthropic_sse_stream,
+        streaming_responses::{create_anthropic_sse_stream_from_responses, ResponseCreatedTap},
+        transform, transform_responses,
     },
     response_processor::{create_logged_passthrough_stream, process_response, SseUsageCollector},
     server::ProxyState,
@@ -28,6 +32,7 @@ use crate::app_config::AppType;
 use axum::{extract::State, http::StatusCode, response::IntoResponse, Json};
 use bytes::Bytes;
 use serde_json::{json, Value};
+use std::sync::Arc;
 
 // ============================================================================
 // 健康检查和状态查询（简单端点）
@@ -81,6 +86,7 @@ pub async fn handle_messages(
             body.clone(),
             headers,
             ctx.get_providers(),
+            ctx.session_id.as_str(),
         )
         .await
     {
@@ -107,7 +113,13 @@ pub async fn handle_messages(
     }
 
     // 通用响应处理（透传模式）
-    process_response(response, &ctx, &state, &CLAUDE_PARSER_CONFIG).await
+    process_response(
+        super::hyper_client::ProxyResponse::Reqwest(response),
+        &ctx,
+        &state,
+        &CLAUDE_PARSER_CONFIG,
+    )
+    .await
 }
 
 /// Claude 格式转换处理（独有逻辑）
@@ -117,11 +129,12 @@ async fn handle_claude_transform(
     response: reqwest::Response,
     ctx: &RequestContext,
     state: &ProxyState,
-    _original_body: &Value,
+    original_body: &Value,
     is_stream: bool,
 ) -> Result<axum::response::Response, ProxyError> {
     let status = response.status();
     let api_format = get_claude_api_format(&ctx.provider);
+    let bridge_metadata = build_responses_bridge_metadata(ctx, original_body);
 
     if is_stream {
         // 根据 api_format 选择流式转换器
@@ -129,7 +142,31 @@ async fn handle_claude_transform(
         let sse_stream: Box<
             dyn futures::Stream<Item = Result<Bytes, std::io::Error>> + Send + Unpin,
         > = if api_format == "openai_responses" {
-            Box::new(Box::pin(create_anthropic_sse_stream_from_responses(stream)))
+            let persistence_tap: Option<ResponseCreatedTap> = bridge_metadata.clone().map(|_| {
+                let original_body = original_body.clone();
+                let provider = ctx.provider.clone();
+                let session_id = ctx.session_id.clone();
+                let provider_id = ctx.provider.id.clone();
+                Arc::new(move |response_id: &str, response_model: Option<&str>| {
+                    if let Err(err) = persist_responses_response(
+                        &original_body,
+                        &provider,
+                        &session_id,
+                        response_id,
+                        response_model,
+                    ) {
+                        log::warn!(
+                            "[Claude/Responses] failed to persist response id for provider {}: {}",
+                            provider_id,
+                            err
+                        );
+                    }
+                }) as ResponseCreatedTap
+            });
+            Box::new(Box::pin(create_anthropic_sse_stream_from_responses(
+                stream,
+                persistence_tap,
+            )))
         } else {
             Box::new(Box::pin(create_anthropic_sse_stream(stream)))
         };
@@ -213,6 +250,30 @@ async fn handle_claude_transform(
         ProxyError::TransformError(format!("Failed to parse upstream response: {e}"))
     })?;
 
+    if api_format == "openai_responses" {
+        if let (Some(metadata), Some(response_id)) = (
+            bridge_metadata.as_ref(),
+            upstream_response.get("id").and_then(|v| v.as_str()),
+        ) {
+            if let Err(err) = persist_responses_response(
+                original_body,
+                &ctx.provider,
+                &ctx.session_id,
+                response_id,
+                upstream_response
+                    .get("model")
+                    .and_then(|v| v.as_str())
+                    .or(Some(metadata.model.as_str())),
+            ) {
+                log::warn!(
+                    "[Claude/Responses] failed to persist non-streaming response id for provider {}: {}",
+                    ctx.provider.id,
+                    err
+                );
+            }
+        }
+    }
+
     // 根据 api_format 选择非流式转换器
     let anthropic_response = if api_format == "openai_responses" {
         transform_responses::responses_to_anthropic(upstream_response)
@@ -280,6 +341,33 @@ async fn handle_claude_transform(
     })
 }
 
+fn build_responses_bridge_metadata(
+    ctx: &RequestContext,
+    original_body: &Value,
+) -> Option<BridgeMetadata> {
+    if get_claude_api_format(&ctx.provider) != "openai_responses" {
+        return None;
+    }
+
+    let explicit_prompt_cache_key = ctx
+        .provider
+        .meta
+        .as_ref()
+        .and_then(|m| m.prompt_cache_key.as_deref());
+    let transformed = transform_responses::anthropic_to_responses(
+        original_body.clone(),
+        explicit_prompt_cache_key,
+    )
+    .ok()?;
+
+    Some(bridge_metadata_for_responses_request(
+        &transformed,
+        &ctx.session_id,
+        &ctx.provider.id,
+        explicit_prompt_cache_key,
+    ))
+}
+
 // ============================================================================
 // Codex API 处理器
 // ============================================================================
@@ -306,6 +394,7 @@ pub async fn handle_chat_completions(
             body,
             headers,
             ctx.get_providers(),
+            ctx.session_id.as_str(),
         )
         .await
     {
@@ -322,7 +411,13 @@ pub async fn handle_chat_completions(
     ctx.provider = result.provider;
     let response = result.response;
 
-    process_response(response, &ctx, &state, &OPENAI_PARSER_CONFIG).await
+    process_response(
+        super::hyper_client::ProxyResponse::Reqwest(response),
+        &ctx,
+        &state,
+        &OPENAI_PARSER_CONFIG,
+    )
+    .await
 }
 
 /// 处理 /v1/responses 请求（OpenAI Responses API - Codex CLI 透传）
@@ -347,6 +442,7 @@ pub async fn handle_responses(
             body,
             headers,
             ctx.get_providers(),
+            ctx.session_id.as_str(),
         )
         .await
     {
@@ -363,7 +459,13 @@ pub async fn handle_responses(
     ctx.provider = result.provider;
     let response = result.response;
 
-    process_response(response, &ctx, &state, &CODEX_PARSER_CONFIG).await
+    process_response(
+        super::hyper_client::ProxyResponse::Reqwest(response),
+        &ctx,
+        &state,
+        &CODEX_PARSER_CONFIG,
+    )
+    .await
 }
 
 /// 处理 /v1/responses/compact 请求（OpenAI Responses Compact API - Codex CLI 透传）
@@ -388,6 +490,7 @@ pub async fn handle_responses_compact(
             body,
             headers,
             ctx.get_providers(),
+            ctx.session_id.as_str(),
         )
         .await
     {
@@ -404,7 +507,13 @@ pub async fn handle_responses_compact(
     ctx.provider = result.provider;
     let response = result.response;
 
-    process_response(response, &ctx, &state, &CODEX_PARSER_CONFIG).await
+    process_response(
+        super::hyper_client::ProxyResponse::Reqwest(response),
+        &ctx,
+        &state,
+        &CODEX_PARSER_CONFIG,
+    )
+    .await
 }
 
 // ============================================================================
@@ -442,6 +551,7 @@ pub async fn handle_gemini(
             body,
             headers,
             ctx.get_providers(),
+            ctx.session_id.as_str(),
         )
         .await
     {
@@ -458,7 +568,13 @@ pub async fn handle_gemini(
     ctx.provider = result.provider;
     let response = result.response;
 
-    process_response(response, &ctx, &state, &GEMINI_PARSER_CONFIG).await
+    process_response(
+        super::hyper_client::ProxyResponse::Reqwest(response),
+        &ctx,
+        &state,
+        &GEMINI_PARSER_CONFIG,
+    )
+    .await
 }
 
 // ============================================================================
